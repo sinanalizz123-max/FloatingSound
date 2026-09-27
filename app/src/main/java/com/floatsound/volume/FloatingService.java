@@ -429,7 +429,7 @@ public class FloatingService extends Service {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(rounded(0xD91E1E28, 16));
-        card.setPadding(dp(7), dp(6), dp(7), dp(7));
+        card.setPadding(dp(5), dp(5), dp(5), dp(6));
         card.setElevation(dp(6));
         card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {} });
         card.setClickable(true);
@@ -444,6 +444,23 @@ public class FloatingService extends Service {
         title.setTextColor(0xFFFFFFFF);
         title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView nativeBtn = new TextView(this);
+        nativeBtn.setText("\uD83D\uDD0A");
+        nativeBtn.setTextSize(13f);
+        nativeBtn.setGravity(Gravity.CENTER);
+        nativeBtn.setPadding(dp(6), dp(2), dp(6), dp(2));
+        nativeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                // Trigger the actual native system volume controller, no volume change.
+                try {
+                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                            AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
+                } catch (Exception ignored) {}
+            }
+        });
+        titleRow.addView(nativeBtn, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView close = new TextView(this);
         close.setText("\u2715");
@@ -526,8 +543,8 @@ public class FloatingService extends Service {
         Button b = new Button(this);
         b.setText(label);
         b.setTextSize(17f);
-        b.setMinimumHeight(dp(34));
-        b.setMinHeight(dp(34));
+        b.setMinimumHeight(dp(30));
+        b.setMinHeight(dp(30));
         b.setPadding(dp(2), dp(2), dp(2), dp(2));
         return b;
     }
@@ -536,18 +553,18 @@ public class FloatingService extends Service {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        row.addView(col, new LinearLayout.LayoutParams(dp(43), ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(col, new LinearLayout.LayoutParams(dp(38), ViewGroup.LayoutParams.WRAP_CONTENT));
 
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(20), dp(20));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(18), dp(18));
         iconLp.bottomMargin = dp(1);
         col.addView(icon, iconLp);
 
         FrameLayout box = new FrameLayout(this);
         box.setClipChildren(false);
-        col.addView(box, new LinearLayout.LayoutParams(dp(43), dp(108)));
+        col.addView(box, new LinearLayout.LayoutParams(dp(38), dp(100)));
 
         SeekBar sb = new SeekBar(this);
         try {
@@ -566,7 +583,7 @@ public class FloatingService extends Service {
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
-        box.addView(sb, new FrameLayout.LayoutParams(dp(100), dp(34), Gravity.CENTER));
+        box.addView(sb, new FrameLayout.LayoutParams(dp(92), dp(32), Gravity.CENTER));
 
         TextView val = new TextView(this);
         val.setTextSize(9f);
