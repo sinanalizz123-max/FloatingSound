@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Floating Sound</string>
+    <string name="tile_label">Sound mode</string>
+    <string name="notif_channel_name">Floating control</string>
+    <string name="notif_title">Floating volume active</string>
+    <string name="notif_text">Tap to open Floating Sound</string>
+</resources>

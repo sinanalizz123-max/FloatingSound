@@ -1,0 +1,82 @@
+Build a small Android utility app that replaces the phone's physical volume buttons with an always-available floating control.
+
+Core requirement
+
+Use the existing local Android project/build environment and modify/build the actual project. Do NOT create a separate mockup, web app, prototype, or unrelated project.
+
+Main feature — Floating volume button
+
+- Create a tiny floating circular button/dot that stays above other apps.
+- Request and use Android's "Display over other apps" permission.
+- The floating dot should be draggable so the user can position it anywhere around the screen.
+- Keep it visually minimal when collapsed.
+- Tapping the dot expands a compact volume-control panel.
+- Tapping outside the panel collapses it back to the small dot.
+
+Volume controls
+
+The expanded panel should provide:
+
+- Volume Up
+- Volume Down
+- A visual volume level/slider
+- Media volume control
+- Ring volume control
+- Alarm volume control
+
+Use Android's native "AudioManager" APIs rather than trying to simulate physical buttons.
+
+Sound mode controls
+
+Add three clearly visible tiles/buttons:
+
+- 🔊 Ring
+- 📳 Vibrate
+- 🔇 Silent
+
+Tapping a tile should immediately switch the phone's ringer mode using the appropriate Android APIs.
+
+Clearly indicate which mode is currently active.
+
+Quick Settings
+
+Also implement an Android Quick Settings tile for the sound mode if supported by the Android version.
+The tile should allow quickly switching/controlling the sound mode from the notification shade.
+
+UI
+
+Keep the design:
+
+- Very lightweight
+- Modern Android
+- Minimal
+- Easy to use with one hand
+- Large enough touch targets
+- No unnecessary screens or features
+
+The floating control should consume as little screen space as possible.
+
+Permissions / Android behavior
+
+Handle required permissions properly and explain/request them through the app UI.
+Respect Android background-service and foreground-service requirements for the floating overlay.
+Make the service reliable when the app is not in the foreground.
+
+Important build instruction
+
+First inspect the entire existing local project and understand its current structure, Gradle configuration, package name, source files, and Android version.
+
+Then implement the feature directly into the existing project.
+
+Do not randomly replace or delete existing source files.
+Do not modify unrelated functionality.
+Before finishing:
+
+1. Build the actual APK using the local build setup.
+2. Check for compilation errors.
+3. Fix all errors.
+4. Check the project again after the fixes.
+5. Confirm exactly which files were changed.
+6. Leave the project in a clean buildable state.
+
+The final result must be a real installable Android application, not just a UI prototype.
