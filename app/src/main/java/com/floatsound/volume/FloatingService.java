@@ -41,7 +41,6 @@ public class FloatingService extends Service {
     private static final String CHANNEL_ID = "float_ctl";
     private static final int NOTIF_ID = 1001;
 
-    // Silent-without-DND: silent = NORMAL mode + ring stream muted (never RINGER_MODE_SILENT).
     private static final String KEY_LAST_RING = "last_ring_vol";
     private static final String KEY_DOCK_RIGHT = "dock_right";
 
@@ -118,8 +117,6 @@ public class FloatingService extends Service {
                 .edit().putBoolean(MainActivity.KEY_ENABLED, on).apply();
     }
 
-    // ---------- foreground ----------
-
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             try {
@@ -148,11 +145,9 @@ public class FloatingService extends Service {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
             Notification.Builder b;
-            if (Build.VERSION.SDK_INT >= 26) {
-                b = new Notification.Builder(this, CHANNEL_ID);
-            } else {
-                b = new Notification.Builder(this);
-            }
+            if (Build.VERSION.SDK_INT >= 26) b = new Notification.Builder(this, CHANNEL_ID);
+            else b = new Notification.Builder(this);
+
             b.setContentTitle(getString(R.string.notif_title))
                     .setContentText(getString(R.string.notif_text))
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -185,26 +180,18 @@ public class FloatingService extends Service {
         }
     }
 
-    // ---------- helpers ----------
-
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
     private int screenW() {
-        try {
-            return getResources().getDisplayMetrics().widthPixels;
-        } catch (Exception e) {
-            return 1080;
-        }
+        try { return getResources().getDisplayMetrics().widthPixels; }
+        catch (Exception e) { return 1080; }
     }
 
     private int screenH() {
-        try {
-            return getResources().getDisplayMetrics().heightPixels;
-        } catch (Exception e) {
-            return 1920;
-        }
+        try { return getResources().getDisplayMetrics().heightPixels; }
+        catch (Exception e) { return 1920; }
     }
 
     private GradientDrawable circle(int fill) {
@@ -226,27 +213,12 @@ public class FloatingService extends Service {
         return getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE);
     }
 
-    // ---------- silent WITHOUT DND ----------
-
-    /** 0=ring, 1=vibrate, 2=silent (native ringer modes; muted ring also reads as silent) */
     private int currentMode() {
         try {
-            int rm = audio.getRingerMode();
-            if (rm == AudioManager.RINGER_MODE_SILENT) return 2;
-            if (rm == AudioManager.RINGER_MODE_VIBRATE) return 1;
-            if (audio.isStreamMute(AudioManager.STREAM_RING)) return 2;
-            return 0;
+            return audio.getRingerMode() == AudioManager.RINGER_MODE_SILENT ? 2
+                    : audio.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE ? 1 : 0;
         } catch (Exception e) {
             return 0;
-        }
-    }
-
-    private boolean hasDndAccess() {
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            return nm != null && nm.isNotificationPolicyAccessGranted();
-        } catch (Exception e) {
-            return false;
         }
     }
 
@@ -263,10 +235,10 @@ public class FloatingService extends Service {
     }
 
     private void askForDnd() {
-        Toast.makeText(this, "Allow DND access: open the app → step 2", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "Allow Notification Policy Access to change Silent mode", Toast.LENGTH_LONG).show();
         try {
-            Intent i = new Intent(this, MainActivity.class);
-            i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            Intent i = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(i);
         } catch (Exception ignored) {}
     }
@@ -274,41 +246,28 @@ public class FloatingService extends Service {
     private void setMode(int mode) {
         try {
             if (mode == AudioManager.RINGER_MODE_NORMAL) {
-                // Ring = unmute + FULL ring volume. Leaving system silent needs DND access.
-                try {
-                    audio.adjustStreamVolume(AudioManager.STREAM_RING,
-                            AudioManager.ADJUST_UNMUTE, 0);
-                } catch (Exception ignored) {}
                 audio.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
                 int max = audio.getStreamMaxVolume(AudioManager.STREAM_RING);
                 audio.setStreamVolume(AudioManager.STREAM_RING, max, 0);
                 Toast.makeText(this, "Ring · full " + max + "/" + max, Toast.LENGTH_SHORT).show();
             } else if (mode == AudioManager.RINGER_MODE_VIBRATE) {
-                try {
-                    audio.adjustStreamVolume(AudioManager.STREAM_RING,
-                            AudioManager.ADJUST_UNMUTE, 0);
-                } catch (Exception ignored) {}
                 audio.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
-                buzz(40); // instant proof the button worked
+                buzz(40);
                 Toast.makeText(this, "Vibrate", Toast.LENGTH_SHORT).show();
             } else {
-                // Silent = system native silent (no sound AND no vibration).
-                // Entering it needs DND access on modern Android.
+                // Use Android's actual system Silent ringer mode.
+                // Do not emulate Silent by muting individual streams.
                 audio.setRingerMode(AudioManager.RINGER_MODE_SILENT);
                 Toast.makeText(this, "Silent", Toast.LENGTH_SHORT).show();
             }
         } catch (SecurityException se) {
-            // E.g. phone is in system silent and we lack DND access: only the user can grant it.
             askForDnd();
         } catch (Exception ignored) {}
         refreshPanel();
-        // Late refresh: system applies mode async, so update highlight after broadcasts.
         handler.postDelayed(new Runnable() {
             @Override public void run() { refreshPanel(); }
         }, 700);
     }
-
-    // ---------- edge-docked dot (no arrow): tap opens panel ----------
 
     private void ensureDot() {
         if (expanded) return;
@@ -319,11 +278,8 @@ public class FloatingService extends Service {
         if (dotView != null) return;
         dockRight = prefs().getBoolean(KEY_DOCK_RIGHT, true);
         buildDot();
-        try {
-            wm.addView(dotView, dotParams);
-        } catch (Exception e) {
-            dotView = null;
-        }
+        try { wm.addView(dotView, dotParams); }
+        catch (Exception e) { dotView = null; }
     }
 
     private void buildDot() {
@@ -341,10 +297,8 @@ public class FloatingService extends Service {
         y = Math.max(0, Math.min(y, screenH() - dp(120)));
 
         dotParams = new WindowManager.LayoutParams(
-                dotSize, dotSize,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
+                dotSize, dotSize, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
         dotParams.gravity = Gravity.TOP | Gravity.START;
         dotParams.x = dockRight ? Math.max(0, screenW() - dotSize) : 0;
         dotParams.y = y;
@@ -367,34 +321,27 @@ public class FloatingService extends Service {
                     case MotionEvent.ACTION_MOVE: {
                         int dx = (int) (e.getRawX() - touch[0]);
                         int dy = (int) (e.getRawY() - touch[1]);
-                        if (!dragging[0] && (Math.abs(dx) > slop || Math.abs(dy) > slop)) {
-                            dragging[0] = true;
-                        }
+                        if (!dragging[0] && (Math.abs(dx) > slop || Math.abs(dy) > slop)) dragging[0] = true;
                         if (dragging[0]) {
                             dotParams.x = start[0] + dx;
-                            dotParams.y = start[1] + dy;
-                            dotParams.y = Math.max(0, Math.min(dotParams.y, screenH() - dp(120)));
+                            dotParams.y = Math.max(0, Math.min(start[1] + dy, screenH() - dp(120)));
                             try { wm.updateViewLayout(dotView, dotParams); } catch (Exception ignored) {}
                         }
                         return true;
                     }
-                    case MotionEvent.ACTION_UP: {
+                    case MotionEvent.ACTION_UP:
                         if (dragging[0]) {
-                            // Snap to nearest side (left / right edge only).
                             int centerX = dotParams.x + dotParams.width / 2;
                             dockRight = centerX >= screenW() / 2;
-                            dotParams.x = dockRight
-                                    ? Math.max(0, screenW() - dotParams.width) : 0;
+                            dotParams.x = dockRight ? Math.max(0, screenW() - dotParams.width) : 0;
                             dotParams.y = Math.max(0, Math.min(dotParams.y, screenH() - dp(120)));
-                            prefs().edit().putBoolean(KEY_DOCK_RIGHT, dockRight)
-                                    .putInt("dot_y", dotParams.y).apply();
+                            prefs().edit().putBoolean(KEY_DOCK_RIGHT, dockRight).putInt("dot_y", dotParams.y).apply();
                             try { wm.updateViewLayout(dotView, dotParams); } catch (Exception ignored) {}
                         } else {
                             v.performClick();
                             showExpanded();
                         }
                         return true;
-                    }
                 }
                 return false;
             }
@@ -407,8 +354,6 @@ public class FloatingService extends Service {
             dotView = null;
         }
     }
-
-    // ---------- slim expanded panel ----------
 
     private void showExpanded() {
         if (expanded) return;
@@ -444,37 +389,33 @@ public class FloatingService extends Service {
     }
 
     private void buildExpanded() {
-        // Anchor the panel next to the dot instead of screen center.
-        int estW = dp(200), estH = dp(300);
+        // Panel width is derived from its actual child content; no fake 200dp panel estimate.
+        final int panelWidth = dp(172);
+        final int panelHeight = dp(220);
         int px = dockRight
-                ? screenW() - dp(48) - estW - dp(8)
-                : dp(48) + dp(8);
-        px = Math.max(dp(4), Math.min(px, screenW() - estW - dp(4)));
-        int py = (lastDotY + dp(24)) - estH / 2;
-        py = Math.max(dp(40), Math.min(py, screenH() - estH - dp(80)));
+                ? screenW() - dp(48) - panelWidth - dp(6)
+                : dp(48) + dp(6);
+        px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
 
-        // Transparent fullscreen catcher: video behind stays visible, tap outside collapses.
+        int py = (lastDotY + dp(24)) - panelHeight / 2;
+        py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
+
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0x00000000);
         root.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { collapse(); }
         });
 
-        // Frosted-glass style card. (True blur isn't available to overlay windows,
-        // so translucent dark glass is used to keep the video behind visible.)
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(0xD91E1E28, 18));
-        card.setPadding(dp(10), dp(8), dp(10), dp(10));
+        card.setBackground(rounded(0xD91E1E28, 16));
+        card.setPadding(dp(7), dp(6), dp(7), dp(7));
         card.setElevation(dp(6));
-        card.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { /* consume */ }
-        });
+        card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {} });
         card.setClickable(true);
 
         FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.START);
+                panelWidth, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
         cardLp.leftMargin = px;
         cardLp.topMargin = py;
         root.addView(card, cardLp);
@@ -482,112 +423,95 @@ public class FloatingService extends Service {
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
         TextView title = new TextView(this);
         title.setText("\u266A Volume");
-        title.setTextSize(13f);
+        title.setTextSize(12f);
         title.setTextColor(0xFFFFFFFF);
         title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        titleRow.addView(title, titleLp);
+        titleRow.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
         TextView close = new TextView(this);
         close.setText("\u2715");
-        close.setTextSize(14f);
+        close.setTextSize(13f);
         close.setTextColor(0xFFB0B0B8);
         close.setGravity(Gravity.CENTER);
-        close.setPadding(dp(8), dp(4), dp(8), dp(4));
-        close.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { collapse(); }
-        });
+        close.setPadding(dp(6), dp(2), dp(6), dp(2));
+        close.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { collapse(); } });
         titleRow.addView(close, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        card.addView(titleRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(titleRow);
 
-        // Vertical sliders: media / call / ring side by side.
         LinearLayout sliderRow = new LinearLayout(this);
         sliderRow.setOrientation(LinearLayout.HORIZONTAL);
-        sliderRow.setGravity(Gravity.CENTER_HORIZONTAL);
-        sliderRow.setPadding(0, dp(4), 0, 0);
+        sliderRow.setGravity(Gravity.CENTER);
+        sliderRow.setPadding(0, dp(2), 0, 0);
         card.addView(sliderRow, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         sbMusic = addSliderColumn(sliderRow, AudioManager.STREAM_MUSIC, android.R.drawable.ic_media_play);
         sbCall = addSliderColumn(sliderRow, AudioManager.STREAM_VOICE_CALL, android.R.drawable.ic_menu_call);
         sbRing = addSliderColumn(sliderRow, AudioManager.STREAM_RING, android.R.drawable.ic_lock_silent_mode_off);
 
         TextView modeLabel = new TextView(this);
         modeLabel.setText("Sound mode");
-        modeLabel.setTextSize(11f);
+        modeLabel.setTextSize(10f);
         modeLabel.setTextColor(0xFFB0B0B8);
-        modeLabel.setPadding(0, dp(6), 0, dp(3));
+        modeLabel.setPadding(0, dp(3), 0, dp(2));
         card.addView(modeLabel);
 
-        // Modes in one horizontal row to save space, icons only.
         LinearLayout modes = new LinearLayout(this);
         modes.setOrientation(LinearLayout.HORIZONTAL);
+
         btnRing = modeButton("\uD83D\uDD0A");
-        btnRing.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_NORMAL); }
-        });
+        btnRing.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_NORMAL); } });
         btnVibrate = modeButton("\uD83D\uDCF3");
-        btnVibrate.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_VIBRATE); }
-        });
+        btnVibrate.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_VIBRATE); } });
         btnSilent = modeButton("\uD83D\uDD07");
-        btnSilent.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_SILENT); }
-        });
-        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        mLp.setMargins(dp(2), 0, dp(2), 0);
+        btnSilent.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_SILENT); } });
+
+        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        mLp.setMargins(dp(1), 0, dp(1), 0);
         modes.addView(btnRing, mLp);
-        modes.addView(btnVibrate, mLp);
-        modes.addView(btnSilent, mLp);
+        modes.addView(btnVibrate, new LinearLayout.LayoutParams(mLp));
+        modes.addView(btnSilent, new LinearLayout.LayoutParams(mLp));
         card.addView(modes, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         expandRoot = root;
         expandParams = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT);
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
         expandParams.gravity = Gravity.TOP | Gravity.START;
     }
 
     private Button modeButton(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextSize(18f);
-        b.setMinimumHeight(dp(38));
-        b.setMinHeight(dp(38));
-        b.setPadding(dp(4), dp(4), dp(4), dp(4));
+        b.setTextSize(17f);
+        b.setMinimumHeight(dp(34));
+        b.setMinHeight(dp(34));
+        b.setPadding(dp(2), dp(2), dp(2), dp(2));
         return b;
-    }
-
-    private static String streamName(int stream) {
-        if (stream == AudioManager.STREAM_MUSIC) return "media";
-        if (stream == AudioManager.STREAM_RING) return "ring";
-        return "call";
     }
 
     private SeekBar addSliderColumn(LinearLayout row, final int stream, int iconRes) {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        row.addView(col, new LinearLayout.LayoutParams(dp(48), ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(col, new LinearLayout.LayoutParams(dp(43), ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Small native icon on top.
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(22), dp(22));
-        iconLp.bottomMargin = dp(2);
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(20), dp(20));
+        iconLp.bottomMargin = dp(1);
         col.addView(icon, iconLp);
 
         FrameLayout box = new FrameLayout(this);
         box.setClipChildren(false);
-        col.addView(box, new LinearLayout.LayoutParams(dp(48), dp(122)));
+        col.addView(box, new LinearLayout.LayoutParams(dp(43), dp(108)));
 
         SeekBar sb = new SeekBar(this);
         try {
@@ -595,24 +519,21 @@ public class FloatingService extends Service {
             sb.setMax(Math.max(1, max));
             sb.setProgress(audio.getStreamVolume(stream));
         } catch (Exception ignored) {}
-        sb.setRotation(-90); // vertical slider, max at top
+        sb.setRotation(-90);
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
                 if (fromUser && !updatingSliders) {
                     try { audio.setStreamVolume(stream, progress, 0); } catch (Exception ignored) {}
-                    handler.post(new Runnable() {
-                        @Override public void run() { refreshPanel(); }
-                    });
+                    handler.post(new Runnable() { @Override public void run() { refreshPanel(); } });
                 }
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
-        box.addView(sb, new FrameLayout.LayoutParams(dp(112), dp(36), Gravity.CENTER));
+        box.addView(sb, new FrameLayout.LayoutParams(dp(100), dp(34), Gravity.CENTER));
 
-        // Value only under each slider (no letters).
         TextView val = new TextView(this);
-        val.setTextSize(10f);
+        val.setTextSize(9f);
         val.setTextColor(0xFFB0B0B8);
         val.setGravity(Gravity.CENTER);
         col.addView(val, new LinearLayout.LayoutParams(
@@ -628,10 +549,9 @@ public class FloatingService extends Service {
         if (!expanded) return;
         updatingSliders = true;
         try {
-            // Value labels only (icons sit on top); slider positions refresh.
-            updateSlider(sbMusic, tvMusicVal, "", AudioManager.STREAM_MUSIC);
-            updateSlider(sbCall, tvCallVal, "", AudioManager.STREAM_VOICE_CALL);
-            updateSlider(sbRing, tvRingVal, "", AudioManager.STREAM_RING);
+            updateSlider(sbMusic, tvMusicVal, AudioManager.STREAM_MUSIC);
+            updateSlider(sbCall, tvCallVal, AudioManager.STREAM_VOICE_CALL);
+            updateSlider(sbRing, tvRingVal, AudioManager.STREAM_RING);
             highlightModes();
         } catch (Exception ignored) {
         } finally {
@@ -639,7 +559,7 @@ public class FloatingService extends Service {
         }
     }
 
-    private void updateSlider(SeekBar sb, TextView label, String name, int stream) {
+    private void updateSlider(SeekBar sb, TextView label, int stream) {
         if (sb == null) return;
         int cur = 0, max = 1;
         try {
@@ -661,10 +581,10 @@ public class FloatingService extends Service {
     private void styleMode(Button b, boolean active) {
         if (b == null) return;
         if (active) {
-            b.setBackground(rounded(0xFF4F46E5, 10));
+            b.setBackground(rounded(0xFF4F46E5, 9));
             b.setTextColor(0xFFFFFFFF);
         } else {
-            b.setBackground(rounded(0x33FFFFFF, 10));
+            b.setBackground(rounded(0x33FFFFFF, 9));
             b.setTextColor(0xFFFFFFFF);
         }
     }
