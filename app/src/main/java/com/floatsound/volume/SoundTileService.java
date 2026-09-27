@@ -74,11 +74,28 @@ public class SoundTileService extends TileService {
         try {
             AudioManager a = audio();
             if (a == null) return;
-            // Silent = system native silent (no sound AND no vibration, needs DND access).
-            a.setRingerMode(AudioManager.RINGER_MODE_SILENT);
-            Toast.makeText(this, "Silent", Toast.LENGTH_SHORT).show();
-        } catch (SecurityException se) {
-            Toast.makeText(this, "Allow DND access in the Floating Sound app", Toast.LENGTH_LONG).show();
+            // Silent = mute the ring stream only: calls stay quiet,
+            // media keeps playing. DND is separate and never touched.
+            try { a.setRingerMode(AudioManager.RINGER_MODE_NORMAL); }
+            catch (SecurityException se) {
+                Toast.makeText(this, "Allow DND access in the Floating Sound app", Toast.LENGTH_LONG).show();
+            } catch (Exception ignored) {}
+            try { a.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0); } catch (Exception ignored) {}
+            final AudioManager am = a;
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override public void run() {
+                    try {
+                        if (am.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE) {
+                            am.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                        }
+                        if (!am.isStreamMute(AudioManager.STREAM_RING)) {
+                            am.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0);
+                        }
+                    } catch (Exception ignored) {}
+                    updateTile();
+                }
+            }, 350);
+            Toast.makeText(this, "Silent · calls muted", Toast.LENGTH_SHORT).show();
         } catch (Exception ignored) {}
     }
 

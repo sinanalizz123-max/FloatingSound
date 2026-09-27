@@ -53,6 +53,7 @@ public class FloatingService extends Service {
     private boolean expanded = false;
 
     private boolean dockRight = true;
+    private boolean wantSilent = false;
     private int lastDotY = 400;
 
     private SeekBar sbMusic, sbRing, sbAlarm, sbCall;
@@ -215,8 +216,11 @@ public class FloatingService extends Service {
 
     private int currentMode() {
         try {
-            return audio.getRingerMode() == AudioManager.RINGER_MODE_SILENT ? 2
-                    : audio.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE ? 1 : 0;
+            int rm = audio.getRingerMode();
+            if (rm == AudioManager.RINGER_MODE_SILENT) return 2;
+            if (rm == AudioManager.RINGER_MODE_VIBRATE) return 1;
+            if (audio.isStreamMute(AudioManager.STREAM_RING)) return 2;
+            return 0;
         } catch (Exception e) {
             return 0;
         }
@@ -246,19 +250,45 @@ public class FloatingService extends Service {
     private void setMode(int mode) {
         try {
             if (mode == AudioManager.RINGER_MODE_NORMAL) {
+                wantSilent = false;
                 audio.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
                 int max = audio.getStreamMaxVolume(AudioManager.STREAM_RING);
                 audio.setStreamVolume(AudioManager.STREAM_RING, max, 0);
                 Toast.makeText(this, "Ring · full " + max + "/" + max, Toast.LENGTH_SHORT).show();
             } else if (mode == AudioManager.RINGER_MODE_VIBRATE) {
+                wantSilent = false;
                 audio.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
                 buzz(40);
                 Toast.makeText(this, "Vibrate", Toast.LENGTH_SHORT).show();
             } else {
-                // Use Android's actual system Silent ringer mode.
-                // Do not emulate Silent by muting individual streams.
-                audio.setRingerMode(AudioManager.RINGER_MODE_SILENT);
-                Toast.makeText(this, "Silent", Toast.LENGTH_SHORT).show();
+                // Silent = mute the ring stream only: calls stay quiet,
+                // media/alarm/call keep working. DND is a separate function
+                // and is never touched here.
+                try { audio.setRingerMode(AudioManager.RINGER_MODE_NORMAL); }
+                catch (SecurityException se) { askForDnd(); }
+                catch (Exception ignored) {}
+                try {
+                    audio.adjustStreamVolume(AudioManager.STREAM_RING,
+                            AudioManager.ADJUST_MUTE, 0);
+                } catch (Exception ignored) {}
+                wantSilent = true;
+                handler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        if (!wantSilent) return;
+                        try {
+                            // Some ROMs flip a muted ring into vibrate mode; keep it quiet NORMAL.
+                            if (audio.getRingerMode() == AudioManager.RINGER_MODE_VIBRATE) {
+                                audio.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                            }
+                            if (!audio.isStreamMute(AudioManager.STREAM_RING)) {
+                                audio.adjustStreamVolume(AudioManager.STREAM_RING,
+                                        AudioManager.ADJUST_MUTE, 0);
+                            }
+                        } catch (Exception ignored) {}
+                        refreshPanel();
+                    }
+                }, 350);
+                Toast.makeText(this, "Silent · calls muted", Toast.LENGTH_SHORT).show();
             }
         } catch (SecurityException se) {
             askForDnd();
