@@ -434,27 +434,6 @@ public class FloatingService extends Service {
         card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {} });
         card.setClickable(true);
 
-        card.measure(
-                View.MeasureSpec.makeMeasureSpec(screenW(), View.MeasureSpec.AT_MOST),
-                View.MeasureSpec.makeMeasureSpec(screenH(), View.MeasureSpec.AT_MOST));
-        int panelWidth = card.getMeasuredWidth();
-        int panelHeight = card.getMeasuredHeight();
-
-        int px = dockRight
-                ? screenW() - dp(48) - panelWidth - dp(6)
-                : dp(48) + dp(6);
-        px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
-
-        int py = (lastDotY + dp(24)) - panelHeight / 2;
-        py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
-
-        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.START);
-        cardLp.leftMargin = px;
-        cardLp.topMargin = py;
-        root.addView(card, cardLp);
-
         LinearLayout titleRow = new LinearLayout(this);
         titleRow.setOrientation(LinearLayout.HORIZONTAL);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -512,6 +491,28 @@ public class FloatingService extends Service {
         modes.addView(btnSilent, new LinearLayout.LayoutParams(mLp));
         card.addView(modes, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // Measure AFTER all content is added, so right-side anchoring uses the real width.
+        card.measure(
+                View.MeasureSpec.makeMeasureSpec(screenW(), View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(screenH(), View.MeasureSpec.AT_MOST));
+        int panelWidth = Math.max(card.getMeasuredWidth(), dp(120));
+        int panelHeight = Math.max(card.getMeasuredHeight(), dp(120));
+
+        int px = dockRight
+                ? screenW() - dp(48) - panelWidth - dp(6)
+                : dp(48) + dp(6);
+        px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
+
+        int py = (lastDotY + dp(24)) - panelHeight / 2;
+        py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
+
+        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START);
+        cardLp.leftMargin = px;
+        cardLp.topMargin = py;
+        root.addView(card, cardLp);
 
         expandRoot = root;
         expandParams = new WindowManager.LayoutParams(
