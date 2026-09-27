@@ -389,17 +389,7 @@ public class FloatingService extends Service {
     }
 
     private void buildExpanded() {
-        // Panel width is derived from its actual child content; no fake 200dp panel estimate.
-        final int panelWidth = dp(172);
-        final int panelHeight = dp(220);
-        int px = dockRight
-                ? screenW() - dp(48) - panelWidth - dp(6)
-                : dp(48) + dp(6);
-        px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
-
-        int py = (lastDotY + dp(24)) - panelHeight / 2;
-        py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
-
+        // Build the card first, then measure its real content size for accurate positioning.
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0x00000000);
         root.setOnClickListener(new View.OnClickListener() {
@@ -414,8 +404,23 @@ public class FloatingService extends Service {
         card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {} });
         card.setClickable(true);
 
+        card.measure(
+                View.MeasureSpec.makeMeasureSpec(screenW(), View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(screenH(), View.MeasureSpec.AT_MOST));
+        int panelWidth = card.getMeasuredWidth();
+        int panelHeight = card.getMeasuredHeight();
+
+        int px = dockRight
+                ? screenW() - dp(48) - panelWidth - dp(6)
+                : dp(48) + dp(6);
+        px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
+
+        int py = (lastDotY + dp(24)) - panelHeight / 2;
+        py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
+
         FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
-                panelWidth, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START);
         cardLp.leftMargin = px;
         cardLp.topMargin = py;
         root.addView(card, cardLp);
