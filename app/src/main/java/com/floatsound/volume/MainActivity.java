@@ -1,6 +1,8 @@
 package com.floatsound.volume;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -13,6 +15,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -113,8 +118,15 @@ public class MainActivity extends Activity {
         });
         root.addView(btnTile, btnParams());
 
+        Button btnEdit = new Button(this);
+        btnEdit.setText("Edit size & tap action");
+        btnEdit.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showEditDialog(); }
+        });
+        root.addView(btnEdit, btnParams());
+
         TextView hint = new TextView(this);
-        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: vertical glass panel opens next to it (media / call / ring sliders).\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
+        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action.\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
         hint.setTextSize(13f);
         hint.setPadding(0, dp(12), 0, 0);
         root.addView(hint, new LinearLayout.LayoutParams(
@@ -230,6 +242,82 @@ public class MainActivity extends Activity {
     private void requestTile() {
         Toast.makeText(this, "Pull down Quick Settings, tap Edit, add 'Sound mode'",
                 Toast.LENGTH_LONG).show();
+    }
+
+    private void showEditDialog() {
+        final SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        int scale = p.getInt(FloatingService.KEY_SCALE, 100);
+        int tap = p.getInt(FloatingService.KEY_TAP, 2);
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(24), dp(16), dp(24), dp(4));
+
+        final TextView sizeLabel = new TextView(this);
+        sizeLabel.setTextSize(14f);
+        content.addView(sizeLabel);
+
+        SeekBar sb = new SeekBar(this);
+        sb.setMax(60); // 80%..140%
+        sb.setProgress(Math.max(0, Math.min(60, scale - 80)));
+        sizeLabel.setText("Dot & panel size: " + (sb.getProgress() + 80) + "%");
+        sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
+                sizeLabel.setText("Dot & panel size: " + (progress + 80) + "%");
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
+        content.addView(sb);
+
+        TextView tapLabel = new TextView(this);
+        tapLabel.setText("Tap floating dot:");
+        tapLabel.setTextSize(14f);
+        tapLabel.setPadding(0, dp(12), 0, dp(4));
+        content.addView(tapLabel);
+
+        RadioGroup group = new RadioGroup(this);
+        group.setOrientation(RadioGroup.VERTICAL);
+        String[] names = {"Native volume popup", "My panel", "Both"};
+        final int[] ids = new int[names.length];
+        for (int i = 0; i < names.length; i++) {
+            RadioButton rb = new RadioButton(this);
+            rb.setText(names[i]);
+            rb.setTextSize(15f);
+            rb.setId(View.generateViewId());
+            ids[i] = rb.getId();
+            group.addView(rb);
+        }
+        group.check(ids[Math.max(0, Math.min(names.length - 1, tap))]);
+        content.addView(group);
+
+        final SeekBar fSb = sb;
+        final RadioGroup fGroup = group;
+        final int[] fIds = ids;
+        new AlertDialog.Builder(this)
+                .setTitle("Edit floating control")
+                .setView(content)
+                .setPositiveButton("Save", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int which) {
+                        int newScale = fSb.getProgress() + 80;
+                        int checked = fGroup.getCheckedRadioButtonId();
+                        int newTap = 2;
+                        for (int i = 0; i < fIds.length; i++) {
+                            if (fIds[i] == checked) newTap = i;
+                        }
+                        p.edit().putInt(FloatingService.KEY_SCALE, newScale)
+                                .putInt(FloatingService.KEY_TAP, newTap).apply();
+                        if (isServiceEnabled()) {
+                            try {
+                                startService(new Intent(MainActivity.this, FloatingService.class)
+                                        .setAction(FloatingService.ACTION_REBUILD));
+                            } catch (Exception ignored) {}
+                        }
+                        Toast.makeText(MainActivity.this, "Saved", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     @Override

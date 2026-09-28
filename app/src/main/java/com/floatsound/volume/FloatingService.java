@@ -38,6 +38,9 @@ public class FloatingService extends Service {
 
     public static final String ACTION_START = "com.floatsound.volume.START";
     public static final String ACTION_STOP = "com.floatsound.volume.STOP";
+    public static final String ACTION_REBUILD = "com.floatsound.volume.REBUILD";
+    public static final String KEY_SCALE = "ui_scale";
+    public static final String KEY_TAP = "tap_action";
     private static final String CHANNEL_ID = "float_ctl";
     private static final int NOTIF_ID = 1001;
 
@@ -94,6 +97,19 @@ public class FloatingService extends Service {
             setEnabled(false);
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (ACTION_REBUILD.equals(action)) {
+            // Re-read size prefs and rebuild the dot (e.g. after using the Edit screen).
+            if (!prefs().getBoolean(MainActivity.KEY_ENABLED, false)) {
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+            startAsForeground();
+            if (!expanded) {
+                removeDot();
+                ensureDot();
+            }
+            return START_STICKY;
         }
         setEnabled(true);
         startAsForeground();
@@ -183,6 +199,23 @@ public class FloatingService extends Service {
 
     private int dp(int v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    /** UI scale from the Edit screen (percent, 70–150). */
+    private float uiScale() {
+        try {
+            int s = prefs().getInt(KEY_SCALE, 100);
+            if (s < 70) s = 70;
+            if (s > 150) s = 150;
+            return s / 100f;
+        } catch (Exception e) {
+            return 1f;
+        }
+    }
+
+    /** Scaled dp for dot/panel geometry. */
+    private int sdp(int v) {
+        return Math.round(dp(v) * uiScale());
     }
 
     private int screenW() {
@@ -314,7 +347,7 @@ public class FloatingService extends Service {
 
     private void buildDot() {
         dotView = new FrameLayout(this);
-        int dotSize = dp(48);
+        int dotSize = sdp(48);
         TextView tv = new TextView(this);
         tv.setText("\u266A");
         tv.setTextSize(24f);
@@ -369,13 +402,36 @@ public class FloatingService extends Service {
                             try { wm.updateViewLayout(dotView, dotParams); } catch (Exception ignored) {}
                         } else {
                             v.performClick();
-                            showExpanded();
+                            onDotTap();
                         }
                         return true;
                 }
                 return false;
             }
         });
+    }
+
+    /** Dot tap behavior from the Edit screen: 0=native popup, 1=panel, 2=both. */
+    private void onDotTap() {
+        int tap = 2;
+        try { tap = prefs().getInt(KEY_TAP, 2); } catch (Exception ignored) {}
+        if (tap == 0) {
+            nativePopup();
+            return;
+        }
+        if (tap == 1) {
+            showExpanded();
+            return;
+        }
+        nativePopup();
+        showExpanded();
+    }
+
+    private void nativePopup() {
+        try {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
+        } catch (Exception ignored) {}
     }
 
     private void removeDot() {
@@ -429,7 +485,7 @@ public class FloatingService extends Service {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(rounded(0xD91E1E28, 16));
-        card.setPadding(dp(5), dp(5), dp(5), dp(6));
+        card.setPadding(sdp(5), sdp(5), sdp(5), sdp(6));
         card.setElevation(dp(6));
         card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {} });
         card.setClickable(true);
@@ -501,7 +557,7 @@ public class FloatingService extends Service {
         btnSilent = modeButton("\uD83D\uDD07");
         btnSilent.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { setMode(AudioManager.RINGER_MODE_SILENT); } });
 
-        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        LinearLayout.LayoutParams mLp = new LinearLayout.LayoutParams(0, sdp(38), 1f);
         mLp.setMargins(dp(1), 0, dp(1), 0);
         modes.addView(btnRing, mLp);
         modes.addView(btnVibrate, new LinearLayout.LayoutParams(mLp));
@@ -517,11 +573,11 @@ public class FloatingService extends Service {
         int panelHeight = Math.max(card.getMeasuredHeight(), dp(120));
 
         int px = dockRight
-                ? screenW() - dp(48) - panelWidth - dp(6)
-                : dp(48) + dp(6);
+                ? screenW() - sdp(48) - panelWidth - dp(6)
+                : sdp(48) + dp(6);
         px = Math.max(dp(2), Math.min(px, screenW() - panelWidth - dp(2)));
 
-        int py = (lastDotY + dp(24)) - panelHeight / 2;
+        int py = (lastDotY + sdp(24)) - panelHeight / 2;
         py = Math.max(dp(24), Math.min(py, screenH() - panelHeight - dp(48)));
 
         FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
@@ -543,8 +599,8 @@ public class FloatingService extends Service {
         Button b = new Button(this);
         b.setText(label);
         b.setTextSize(14f);
-        b.setMinimumHeight(dp(30));
-        b.setMinHeight(dp(30));
+        b.setMinimumHeight(sdp(30));
+        b.setMinHeight(sdp(30));
         // Kill the framework Button min-width so the row doesn't force the card wide.
         b.setMinWidth(0);
         b.setMinimumWidth(0);
@@ -556,18 +612,18 @@ public class FloatingService extends Service {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        row.addView(col, new LinearLayout.LayoutParams(dp(38), ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.addView(col, new LinearLayout.LayoutParams(sdp(38), ViewGroup.LayoutParams.WRAP_CONTENT));
 
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(18), dp(18));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(sdp(18), sdp(18));
         iconLp.bottomMargin = dp(1);
         col.addView(icon, iconLp);
 
         FrameLayout box = new FrameLayout(this);
         box.setClipChildren(false);
-        col.addView(box, new LinearLayout.LayoutParams(dp(38), dp(100)));
+        col.addView(box, new LinearLayout.LayoutParams(sdp(38), sdp(100)));
 
         SeekBar sb = new SeekBar(this);
         try {
@@ -586,7 +642,7 @@ public class FloatingService extends Service {
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
         });
-        box.addView(sb, new FrameLayout.LayoutParams(dp(92), dp(32), Gravity.CENTER));
+        box.addView(sb, new FrameLayout.LayoutParams(sdp(92), sdp(32), Gravity.CENTER));
 
         TextView val = new TextView(this);
         val.setTextSize(9f);
