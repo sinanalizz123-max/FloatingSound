@@ -542,9 +542,12 @@ public class FloatingService extends Service {
     private Button modeButton(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextSize(17f);
+        b.setTextSize(14f);
         b.setMinimumHeight(dp(30));
         b.setMinHeight(dp(30));
+        // Kill the framework Button min-width so the row doesn't force the card wide.
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
         b.setPadding(dp(2), dp(2), dp(2), dp(2));
         return b;
     }
