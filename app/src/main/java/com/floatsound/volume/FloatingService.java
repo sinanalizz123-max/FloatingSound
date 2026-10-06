@@ -63,7 +63,6 @@ public class FloatingService extends Service {
     private SeekBar sbRing, sbAlarm, sbCall;
     private Button btnRing, btnVibrate, btnSilent;
     private TextView tvMusicVal, tvRingVal, tvAlarmVal, tvCallVal;
-    private TextView masterVal;
     private boolean updatingSliders = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -498,7 +497,6 @@ public class FloatingService extends Service {
             try { wm.removeView(expandRoot); } catch (Exception ignored) {}
             expandRoot = null;
             sbRing = sbAlarm = sbCall = null;
-            masterVal = null;
             btnRing = btnVibrate = btnSilent = null;
         }
     }
@@ -558,38 +556,26 @@ public class FloatingService extends Service {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.addView(titleRow);
 
-        // Tap pad for volume: long-press = down, double-tap = up.
-        masterVal = new TextView(this);
-        masterVal.setTextSize(14f);
-        masterVal.setTextColor(0xFFFFFFFF);
-        masterVal.setGravity(Gravity.CENTER);
-        masterVal.setPadding(0, dp(8), 0, dp(8));
-        masterVal.setClickable(true);
-        masterVal.setFocusable(false);
-        masterVal.setLongClickable(true);
-        final long[] lastTap = new long[1];
-        masterVal.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override public boolean onLongClick(View v) {
-                lastTap[0] = 0;
-                stepMaster(AudioManager.ADJUST_LOWER);
-                return true;
-            }
+        // Plain − / + buttons: gestures keep colliding with the system
+        // (long-press opens App info), buttons always register.
+        LinearLayout updown = new LinearLayout(this);
+        updown.setOrientation(LinearLayout.HORIZONTAL);
+        updown.setPadding(0, dp(4), 0, 0);
+        Button btnDown = stepButton("\u2212");
+        btnDown.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { stepMaster(AudioManager.ADJUST_LOWER); }
         });
-        masterVal.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                long now = android.os.SystemClock.uptimeMillis();
-                if (lastTap[0] != 0 && now - lastTap[0] < 350) {
-                    lastTap[0] = 0;
-                    stepMaster(AudioManager.ADJUST_RAISE);
-                } else {
-                    lastTap[0] = now;
-                }
-            }
+        Button btnUp = stepButton("+");
+        btnUp.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { stepMaster(AudioManager.ADJUST_RAISE); }
         });
-        LinearLayout.LayoutParams masterLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        masterLp.topMargin = dp(4);
-        card.addView(masterVal, masterLp);
+        LinearLayout.LayoutParams downLp = new LinearLayout.LayoutParams(0, sdp(34), 1f);
+        downLp.setMargins(0, 0, dp(2), 0);
+        LinearLayout.LayoutParams upLp = new LinearLayout.LayoutParams(0, sdp(34), 1f);
+        upLp.setMargins(dp(2), 0, 0, 0);
+        updown.addView(btnDown, downLp);
+        updown.addView(btnUp, upLp);
+        card.addView(updown);
 
         LinearLayout sliderRow = new LinearLayout(this);
         sliderRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -722,7 +708,6 @@ public class FloatingService extends Service {
         if (!expanded) return;
         updatingSliders = true;
         try {
-            updateMaster();
             updateSlider(sbCall, tvCallVal, AudioManager.STREAM_VOICE_CALL);
             updateSlider(sbRing, tvRingVal, AudioManager.STREAM_RING);
             highlightModes();
@@ -732,22 +717,21 @@ public class FloatingService extends Service {
         }
     }
 
+    private Button stepButton(String label) {
+        Button b = new Button(this, null, android.R.attr.buttonStyleSmall);
+        b.setText(label);
+        b.setTextSize(18f);
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
+        return b;
+    }
+
     private void stepMaster(int direction) {
         try {
             audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
                     direction, AudioManager.FLAG_SHOW_UI);
         } catch (Exception ignored) {}
         refreshPanel();
-    }
-
-    private void updateMaster() {
-        if (masterVal == null) return;
-        int cur = 0, max = 1;
-        try {
-            cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-            max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        } catch (Exception ignored) {}
-        masterVal.setText("\u266A " + cur + "/" + max + "  ·  hold − · 2×tap +");
     }
 
     private void updateSlider(SeekBar sb, TextView label, int stream) {
