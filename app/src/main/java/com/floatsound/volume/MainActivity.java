@@ -127,7 +127,7 @@ public class MainActivity extends Activity {
         root.addView(btnEdit, btnParams());
 
         TextView hint = new TextView(this);
-        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action, hide dot while video plays.\n• QS tiles: Sound mode, Vol +, Vol − (add via QS Edit).\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
+        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action, hide dot while video plays.\n• QS tiles: Sound mode, Vol (add via QS Edit).\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
         hint.setTextSize(13f);
         hint.setPadding(0, dp(12), 0, 0);
         root.addView(hint, new LinearLayout.LayoutParams(

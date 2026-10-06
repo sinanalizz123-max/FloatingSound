@@ -55,23 +55,12 @@
             </intent-filter>
         </service>
 
-        <!-- Quick Settings tiles for volume up / down -->
+        <!-- Quick Settings tile for volume (tap = up + native slider) -->
         <service
-            android:name=".VolumeUpTileService"
+            android:name=".VolumeTileService"
             android:exported="true"
             android:icon="@android:drawable/arrow_up_float"
-            android:label="Vol +"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".VolumeDownTileService"
-            android:exported="true"
-            android:icon="@android:drawable/arrow_down_float"
-            android:label="Vol −"
+            android:label="Vol"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

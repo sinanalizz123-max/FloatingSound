@@ -60,9 +60,10 @@ public class FloatingService extends Service {
     private boolean wantSilent = false;
     private int lastDotY = 400;
 
-    private SeekBar sbMusic, sbRing, sbAlarm, sbCall;
+    private SeekBar sbRing, sbAlarm, sbCall;
     private Button btnRing, btnVibrate, btnSilent;
     private TextView tvMusicVal, tvRingVal, tvAlarmVal, tvCallVal;
+    private TextView masterVal;
     private boolean updatingSliders = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -496,7 +497,8 @@ public class FloatingService extends Service {
         if (expandRoot != null) {
             try { wm.removeView(expandRoot); } catch (Exception ignored) {}
             expandRoot = null;
-            sbMusic = sbRing = sbAlarm = sbCall = null;
+            sbRing = sbAlarm = sbCall = null;
+            masterVal = null;
             btnRing = btnVibrate = btnSilent = null;
         }
     }
@@ -556,27 +558,52 @@ public class FloatingService extends Service {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.addView(titleRow);
 
-        // Single brightness-style master volume slider: slide right = louder, left = quieter.
-        sbMusic = new SeekBar(this);
-        try {
-            int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-            sbMusic.setMax(Math.max(1, max));
-            sbMusic.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
-        } catch (Exception ignored) {}
-        sbMusic.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
-                if (fromUser && !updatingSliders) {
-                    try { audio.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0); } catch (Exception ignored) {}
-                    handler.post(new Runnable() { @Override public void run() { refreshPanel(); } });
+        // Tap pad for volume: single tap = down one step, double tap = up one step.
+        masterVal = new TextView(this);
+        masterVal.setTextSize(14f);
+        masterVal.setTextColor(0xFFFFFFFF);
+        masterVal.setGravity(Gravity.CENTER);
+        masterVal.setPadding(0, dp(8), 0, dp(8));
+        masterVal.setClickable(true);
+        final int[] padTaps = new int[1];
+        final Runnable padSingle = new Runnable() {
+            @Override public void run() {
+                if (padTaps[0] == 1) {
+                    padTaps[0] = 0;
+                    try {
+                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                                AudioManager.ADJUST_LOWER, 0);
+                    } catch (Exception ignored) {}
+                    refreshPanel();
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {}
+        };
+        masterVal.setOnTouchListener(new View.OnTouchListener() {
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                if (e.getAction() == MotionEvent.ACTION_DOWN) return true;
+                if (e.getAction() == MotionEvent.ACTION_UP) {
+                    v.performClick();
+                    padTaps[0]++;
+                    if (padTaps[0] == 1) {
+                        handler.postDelayed(padSingle, 300);
+                    } else if (padTaps[0] >= 2) {
+                        padTaps[0] = 0;
+                        handler.removeCallbacks(padSingle);
+                        try {
+                            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                                    AudioManager.ADJUST_RAISE, 0);
+                        } catch (Exception ignored) {}
+                        refreshPanel();
+                    }
+                    return true;
+                }
+                return false;
+            }
         });
         LinearLayout.LayoutParams masterLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         masterLp.topMargin = dp(4);
-        card.addView(sbMusic, masterLp);
+        card.addView(masterVal, masterLp);
 
         LinearLayout sliderRow = new LinearLayout(this);
         sliderRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -709,7 +736,7 @@ public class FloatingService extends Service {
         if (!expanded) return;
         updatingSliders = true;
         try {
-            updateSlider(sbMusic, null, AudioManager.STREAM_MUSIC);
+            updateMaster();
             updateSlider(sbCall, tvCallVal, AudioManager.STREAM_VOICE_CALL);
             updateSlider(sbRing, tvRingVal, AudioManager.STREAM_RING);
             highlightModes();
@@ -717,6 +744,16 @@ public class FloatingService extends Service {
         } finally {
             updatingSliders = false;
         }
+    }
+
+    private void updateMaster() {
+        if (masterVal == null) return;
+        int cur = 0, max = 1;
+        try {
+            cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+            max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        } catch (Exception ignored) {}
+        masterVal.setText("\u266A " + cur + "/" + max + "  ·  tap − · 2×tap +");
     }
 
     private void updateSlider(SeekBar sb, TextView label, int stream) {

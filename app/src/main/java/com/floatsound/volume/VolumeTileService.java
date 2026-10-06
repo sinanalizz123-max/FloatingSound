@@ -5,7 +5,9 @@ import android.media.AudioManager;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
 
-public class VolumeUpTileService extends TileService {
+/** Single volume tile: each tap steps media volume up and pops the native
+ *  slider, where you can also drag down. */
+public class VolumeTileService extends TileService {
 
     @Override
     public void onStartListening() {
@@ -13,8 +15,8 @@ public class VolumeUpTileService extends TileService {
         Tile tile = getQsTile();
         if (tile == null) return;
         try {
-            tile.setLabel("Vol +");
-            tile.setContentDescription("Volume up");
+            tile.setLabel("Vol");
+            tile.setContentDescription("Volume up (native slider pops for fine control)");
             tile.setState(Tile.STATE_INACTIVE);
             tile.updateTile();
         } catch (Exception ignored) {}
