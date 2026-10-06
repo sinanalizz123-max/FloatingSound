@@ -2,13 +2,18 @@ package com.floatsound.volume;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -113,7 +118,7 @@ public class MainActivity extends Activity {
         root.addView(btnStop, btnParams());
 
         Button btnTile = new Button(this);
-        btnTile.setText("Add Quick Settings tile");
+        btnTile.setText("Add QS tiles (Sound mode + Vol)");
         btnTile.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { requestTile(); }
         });
@@ -127,7 +132,7 @@ public class MainActivity extends Activity {
         root.addView(btnEdit, btnParams());
 
         TextView hint = new TextView(this);
-        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action, hide dot while video plays.\n• QS tiles: Sound mode, Vol (add via QS Edit).\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
+        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action, hide dot while video plays.\n• QS tiles: Sound mode + Vol — tap Add QS tiles in the app.\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
         hint.setTextSize(13f);
         hint.setPadding(0, dp(12), 0, 0);
         root.addView(hint, new LinearLayout.LayoutParams(
@@ -241,8 +246,49 @@ public class MainActivity extends Activity {
     }
 
     private void requestTile() {
-        Toast.makeText(this, "Pull down Quick Settings, tap Edit, add 'Sound mode'",
-                Toast.LENGTH_LONG).show();
+        // One-tap add for both tiles (system shows a confirm dialog per tile).
+        requestTileService(SoundTileService.class, getString(R.string.tile_label),
+                new Runnable() {
+                    @Override public void run() {
+                        requestTileService(VolumeTileService.class, "Vol", null);
+                    }
+                });
+    }
+
+    /** Ask the system to pin a QS tile. Uses reflection so old Android still compiles. */
+    private void requestTileService(final Class<?> svc, final String label, final Runnable next) {
+        if (Build.VERSION.SDK_INT < 29) {
+            Toast.makeText(this, "Pull down Quick Settings, tap Edit, add '" + label + "'",
+                    Toast.LENGTH_LONG).show();
+            if (next != null) next.run();
+            return;
+        }
+        try {
+            ComponentName cn = new ComponentName(this, svc);
+            Icon icon = Icon.createWithResource(this, android.R.drawable.ic_dialog_info);
+            java.util.concurrent.Executor exec = new java.util.concurrent.Executor() {
+                @Override public void execute(Runnable r) {
+                    new Handler(Looper.getMainLooper()).post(r);
+                }
+            };
+            java.lang.reflect.Method m = android.service.quicksettings.TileService.class.getMethod(
+                    "requestAddTileService",
+                    Context.class, ComponentName.class, CharSequence.class, Icon.class,
+                    java.util.concurrent.Executor.class, java.util.function.Consumer.class);
+            final Context ctx = this;
+            m.invoke(null, this, cn, label, icon, exec,
+                    new java.util.function.Consumer<Integer>() {
+                        @Override public void accept(Integer result) {
+                            Toast.makeText(ctx, "'" + label + "' tile request sent",
+                                    Toast.LENGTH_SHORT).show();
+                            if (next != null) next.run();
+                        }
+                    });
+        } catch (Exception e) {
+            Toast.makeText(this, "Pull down Quick Settings, tap Edit, add '" + label + "'",
+                    Toast.LENGTH_LONG).show();
+            if (next != null) next.run();
+        }
     }
 
     private void showEditDialog() {
