@@ -41,6 +41,7 @@ public class FloatingService extends Service {
     public static final String ACTION_REBUILD = "com.floatsound.volume.REBUILD";
     public static final String KEY_SCALE = "ui_scale";
     public static final String KEY_TAP = "tap_action";
+    public static final String KEY_HIDE_MEDIA = "hide_on_media";
     private static final String CHANNEL_ID = "float_ctl";
     private static final int NOTIF_ID = 1001;
 
@@ -66,6 +67,31 @@ public class FloatingService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
 
+    private boolean autoHidden = false;
+
+    // Hide the dot while video/media audio plays (fullscreen videos stay clean).
+    // Android offers no "fullscreen video" signal to normal apps, so media
+    // playback is used as the trigger. Toggle in the Edit screen.
+    private final Runnable mediaWatch = new Runnable() {
+        @Override public void run() {
+            try {
+                boolean playing = false;
+                try {
+                    playing = prefs().getBoolean(KEY_HIDE_MEDIA, true)
+                            && audio != null && audio.isMusicActive();
+                } catch (Exception ignored) {}
+                if (playing && !expanded && dotView != null) {
+                    removeDot();
+                    autoHidden = true;
+                } else if (autoHidden && (!playing || expanded)) {
+                    autoHidden = false;
+                    ensureDot();
+                }
+            } catch (Exception ignored) {}
+            handler.postDelayed(mediaWatch, 2000);
+        }
+    };
+
     private final BroadcastReceiver volReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
             refreshPanel();
@@ -88,6 +114,7 @@ public class FloatingService extends Service {
                 registerReceiver(volReceiver, f);
             }
         } catch (Exception ignored) {}
+        handler.post(mediaWatch);
     }
 
     @Override

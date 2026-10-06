@@ -14,6 +14,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -126,7 +127,7 @@ public class MainActivity extends Activity {
         root.addView(btnEdit, btnParams());
 
         TextView hint = new TextView(this);
-        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action.\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
+        hint.setText("How to use:\n• Dot sticks to LEFT or RIGHT edge only — drag it to move.\n• Tap dot: native popup + panel (change in Edit).\n• Edit: dot & panel size, tap action, hide dot while video plays.\n• QS tiles: Sound mode, Vol +, Vol − (add via QS Edit).\n• Tap outside panel to close; video behind stays visible.\n• Icons: Ring (full) / Vibrate / Silent (native, needs DND step 2).");
         hint.setTextSize(13f);
         hint.setPadding(0, dp(12), 0, 0);
         root.addView(hint, new LinearLayout.LayoutParams(
@@ -291,6 +292,13 @@ public class MainActivity extends Activity {
         group.check(ids[Math.max(0, Math.min(names.length - 1, tap))]);
         content.addView(group);
 
+        final CheckBox hideBox = new CheckBox(this);
+        hideBox.setText("Hide dot while video plays");
+        hideBox.setTextSize(15f);
+        hideBox.setChecked(p.getBoolean(FloatingService.KEY_HIDE_MEDIA, true));
+        hideBox.setPadding(0, dp(8), 0, 0);
+        content.addView(hideBox);
+
         final SeekBar fSb = sb;
         final RadioGroup fGroup = group;
         final int[] fIds = ids;
@@ -306,7 +314,9 @@ public class MainActivity extends Activity {
                             if (fIds[i] == checked) newTap = i;
                         }
                         p.edit().putInt(FloatingService.KEY_SCALE, newScale)
-                                .putInt(FloatingService.KEY_TAP, newTap).apply();
+                                .putInt(FloatingService.KEY_TAP, newTap)
+                                .putBoolean(FloatingService.KEY_HIDE_MEDIA, hideBox.isChecked())
+                                .apply();
                         if (isServiceEnabled()) {
                             try {
                                 startService(new Intent(MainActivity.this, FloatingService.class)
