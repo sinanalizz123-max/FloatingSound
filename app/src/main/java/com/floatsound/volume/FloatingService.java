@@ -13,6 +13,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Icon;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
@@ -39,6 +40,8 @@ public class FloatingService extends Service {
     public static final String ACTION_START = "com.floatsound.volume.START";
     public static final String ACTION_STOP = "com.floatsound.volume.STOP";
     public static final String ACTION_REBUILD = "com.floatsound.volume.REBUILD";
+    public static final String ACTION_VOL_UP = "com.floatsound.volume.VOL_UP";
+    public static final String ACTION_VOL_DOWN = "com.floatsound.volume.VOL_DOWN";
     public static final String KEY_SCALE = "ui_scale";
     public static final String KEY_TAP = "tap_action";
     public static final String KEY_HIDE_MEDIA = "hide_on_media";
@@ -125,6 +128,22 @@ public class FloatingService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_VOL_UP.equals(action)) {
+            try {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+            } catch (Exception ignored) {}
+            refreshPanel();
+            return START_STICKY;
+        }
+        if (ACTION_VOL_DOWN.equals(action)) {
+            try {
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
+            } catch (Exception ignored) {}
+            refreshPanel();
+            return START_STICKY;
+        }
         if (ACTION_REBUILD.equals(action)) {
             // Re-read size prefs and rebuild the dot (e.g. after using the Edit screen).
             if (!prefs().getBoolean(MainActivity.KEY_ENABLED, false)) {
@@ -188,6 +207,16 @@ public class FloatingService extends Service {
             PendingIntent stopPi = PendingIntent.getService(this, 1, stop,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+            Intent down = new Intent(this, FloatingService.class);
+            down.setAction(ACTION_VOL_DOWN);
+            PendingIntent downPi = PendingIntent.getService(this, 2, down,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent up = new Intent(this, FloatingService.class);
+            up.setAction(ACTION_VOL_UP);
+            PendingIntent upPi = PendingIntent.getService(this, 3, up,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
             Notification.Builder b;
             if (Build.VERSION.SDK_INT >= 26) b = new Notification.Builder(this, CHANNEL_ID);
             else b = new Notification.Builder(this);
@@ -197,6 +226,12 @@ public class FloatingService extends Service {
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
                     .setContentIntent(pi)
                     .setOngoing(true)
+                    .addAction(new Notification.Action.Builder(
+                            Icon.createWithResource(this, android.R.drawable.arrow_down_float),
+                            "−", downPi).build())
+                    .addAction(new Notification.Action.Builder(
+                            Icon.createWithResource(this, android.R.drawable.arrow_up_float),
+                            "+", upPi).build())
                     .addAction(new Notification.Action.Builder(null, "Stop", stopPi).build());
 
             Notification n = b.build();
