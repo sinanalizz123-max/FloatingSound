@@ -559,45 +559,33 @@ public class FloatingService extends Service {
         card.addView(titleRow);
 
         // Tap pad for volume: single tap = down one step, double tap = up one step.
+        // Click-based (not raw touch) so taps register reliably inside the overlay.
         masterVal = new TextView(this);
         masterVal.setTextSize(14f);
         masterVal.setTextColor(0xFFFFFFFF);
         masterVal.setGravity(Gravity.CENTER);
         masterVal.setPadding(0, dp(8), 0, dp(8));
         masterVal.setClickable(true);
+        masterVal.setFocusable(false);
         final int[] padTaps = new int[1];
         final Runnable padSingle = new Runnable() {
             @Override public void run() {
                 if (padTaps[0] == 1) {
                     padTaps[0] = 0;
-                    try {
-                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                                AudioManager.ADJUST_LOWER, 0);
-                    } catch (Exception ignored) {}
-                    refreshPanel();
+                    stepMaster(AudioManager.ADJUST_LOWER);
                 }
             }
         };
-        masterVal.setOnTouchListener(new View.OnTouchListener() {
-            @Override public boolean onTouch(View v, MotionEvent e) {
-                if (e.getAction() == MotionEvent.ACTION_DOWN) return true;
-                if (e.getAction() == MotionEvent.ACTION_UP) {
-                    v.performClick();
-                    padTaps[0]++;
-                    if (padTaps[0] == 1) {
-                        handler.postDelayed(padSingle, 300);
-                    } else if (padTaps[0] >= 2) {
-                        padTaps[0] = 0;
-                        handler.removeCallbacks(padSingle);
-                        try {
-                            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-                                    AudioManager.ADJUST_RAISE, 0);
-                        } catch (Exception ignored) {}
-                        refreshPanel();
-                    }
-                    return true;
+        masterVal.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                padTaps[0]++;
+                if (padTaps[0] == 1) {
+                    handler.postDelayed(padSingle, 300);
+                } else if (padTaps[0] >= 2) {
+                    padTaps[0] = 0;
+                    handler.removeCallbacks(padSingle);
+                    stepMaster(AudioManager.ADJUST_RAISE);
                 }
-                return false;
             }
         });
         LinearLayout.LayoutParams masterLp = new LinearLayout.LayoutParams(
@@ -744,6 +732,14 @@ public class FloatingService extends Service {
         } finally {
             updatingSliders = false;
         }
+    }
+
+    private void stepMaster(int direction) {
+        try {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+                    direction, AudioManager.FLAG_SHOW_UI);
+        } catch (Exception ignored) {}
+        refreshPanel();
     }
 
     private void updateMaster() {
