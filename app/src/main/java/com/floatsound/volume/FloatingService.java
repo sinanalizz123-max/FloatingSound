@@ -558,8 +558,7 @@ public class FloatingService extends Service {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.addView(titleRow);
 
-        // Tap pad for volume: single tap = down one step, double tap = up one step.
-        // Click-based (not raw touch) so taps register reliably inside the overlay.
+        // Tap pad for volume: long-press = down, double-tap = up.
         masterVal = new TextView(this);
         masterVal.setTextSize(14f);
         masterVal.setTextColor(0xFFFFFFFF);
@@ -567,24 +566,23 @@ public class FloatingService extends Service {
         masterVal.setPadding(0, dp(8), 0, dp(8));
         masterVal.setClickable(true);
         masterVal.setFocusable(false);
-        final int[] padTaps = new int[1];
-        final Runnable padSingle = new Runnable() {
-            @Override public void run() {
-                if (padTaps[0] == 1) {
-                    padTaps[0] = 0;
-                    stepMaster(AudioManager.ADJUST_LOWER);
-                }
+        masterVal.setLongClickable(true);
+        final long[] lastTap = new long[1];
+        masterVal.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) {
+                lastTap[0] = 0;
+                stepMaster(AudioManager.ADJUST_LOWER);
+                return true;
             }
-        };
+        });
         masterVal.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                padTaps[0]++;
-                if (padTaps[0] == 1) {
-                    handler.postDelayed(padSingle, 300);
-                } else if (padTaps[0] >= 2) {
-                    padTaps[0] = 0;
-                    handler.removeCallbacks(padSingle);
+                long now = android.os.SystemClock.uptimeMillis();
+                if (lastTap[0] != 0 && now - lastTap[0] < 350) {
+                    lastTap[0] = 0;
                     stepMaster(AudioManager.ADJUST_RAISE);
+                } else {
+                    lastTap[0] = now;
                 }
             }
         });
@@ -749,7 +747,7 @@ public class FloatingService extends Service {
             cur = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
             max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         } catch (Exception ignored) {}
-        masterVal.setText("\u266A " + cur + "/" + max + "  ·  tap − · 2×tap +");
+        masterVal.setText("\u266A " + cur + "/" + max + "  ·  hold − · 2×tap +");
     }
 
     private void updateSlider(SeekBar sb, TextView label, int stream) {
