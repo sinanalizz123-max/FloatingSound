@@ -556,6 +556,28 @@ public class FloatingService extends Service {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         card.addView(titleRow);
 
+        // Single brightness-style master volume slider: slide right = louder, left = quieter.
+        sbMusic = new SeekBar(this);
+        try {
+            int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            sbMusic.setMax(Math.max(1, max));
+            sbMusic.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
+        } catch (Exception ignored) {}
+        sbMusic.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
+                if (fromUser && !updatingSliders) {
+                    try { audio.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0); } catch (Exception ignored) {}
+                    handler.post(new Runnable() { @Override public void run() { refreshPanel(); } });
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
+        LinearLayout.LayoutParams masterLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        masterLp.topMargin = dp(4);
+        card.addView(sbMusic, masterLp);
+
         LinearLayout sliderRow = new LinearLayout(this);
         sliderRow.setOrientation(LinearLayout.HORIZONTAL);
         sliderRow.setGravity(Gravity.CENTER);
@@ -563,7 +585,6 @@ public class FloatingService extends Service {
         card.addView(sliderRow, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        sbMusic = addSliderColumn(sliderRow, AudioManager.STREAM_MUSIC, android.R.drawable.ic_media_play);
         sbCall = addSliderColumn(sliderRow, AudioManager.STREAM_VOICE_CALL, android.R.drawable.ic_menu_call);
         sbRing = addSliderColumn(sliderRow, AudioManager.STREAM_RING, android.R.drawable.ic_lock_silent_mode_off);
 
@@ -688,7 +709,7 @@ public class FloatingService extends Service {
         if (!expanded) return;
         updatingSliders = true;
         try {
-            updateSlider(sbMusic, tvMusicVal, AudioManager.STREAM_MUSIC);
+            updateSlider(sbMusic, null, AudioManager.STREAM_MUSIC);
             updateSlider(sbCall, tvCallVal, AudioManager.STREAM_VOICE_CALL);
             updateSlider(sbRing, tvRingVal, AudioManager.STREAM_RING);
             highlightModes();
